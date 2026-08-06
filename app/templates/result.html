@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AgriVision AI — Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🌾 Diagnosis Result</h1>
+
+        <div class="images">
+            <div>
+                <h3>Uploaded Image</h3>
+                <img src="{{ original_image }}" alt="Uploaded leaf">
+            </div>
+            <div>
+                <h3>Grad-CAM: Where the model focused</h3>
+                <img src="{{ gradcam_image }}" alt="Grad-CAM heatmap">
+            </div>
+        </div>
+
+        <div class="result-box">
+            <h2>{{ class_name }}</h2>
+            <p><strong>Confidence:</strong> {{ confidence }}%</p>
+            <h3>Recommended Treatment</h3>
+            <p>{{ treatment }}</p>
+        </div>
+
+        <a href="/download/{{ pdf_filename }}" class="button">📄 Download Treatment Report (PDF)</a>
+        <a href="/" class="button secondary">Diagnose Another Leaf</a>
+    </div>
+</body>
+</html>

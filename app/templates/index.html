@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AgriVision AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🌾 AgriVision AI</h1>
+        <p>Upload a photo of a crop leaf (cassava, maize, tomato, or pepper) for an instant disease diagnosis.</p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form action="/predict" method="post" enctype="multipart/form-data">
+            <input type="file" name="leaf_image" accept="image/*" required>
+            <button type="submit">Diagnose</button>
+        </form>
+    </div>
+</body>
+</html>
