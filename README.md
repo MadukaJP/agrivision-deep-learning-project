@@ -1,116 +1,86 @@
-# AgriVision AI — Build & Run Guide
+# AgriVision AI — Plant Disease & Crop Health Diagnostic SaaS
 
-## Datasets to add on Kaggle
+Agritech computer vision system that diagnoses crop diseases from leaf
+photos, shows Grad-CAM heatmaps explaining the model's focus, and
+generates a downloadable treatment recommendation PDF. Built for the
+Deep Learning & Applied AI Engineering capstone.
 
-1. `cassava-leaf-disease-classification` (competition — join rules first)
-2. `vipoooool/new-plant-diseases-dataset` — covers maize, tomato, pepper.
-   Note: this dataset's `train/` folder contains augmentation-generated
-   variants of the same base images used in `valid/`. Pooling both (as
-   `dataset_loader.py` does) and re-splitting ourselves is fine since the
-   two folders contain different underlying source photos, not exact
-   duplicates — but if you ever see suspiciously perfect validation
-   accuracy, this pooling is the first thing to double check.
+## Architecture
 
-## Run order (Kaggle notebook)
+```
+[Cassava + PlantVillage-derived datasets] -> [dataset_loader.py: unified
+manifest, stratified split, augmentation] -> [EfficientNetB3 transfer
+learning: Phase 1 frozen backbone -> Phase 2 fine-tuned top layers] ->
+[evaluate.py: confusion matrix, Grad-CAM, OOD test] -> [Flask app:
+upload -> predict -> Grad-CAM overlay -> PDF report] -> [Render deployment]
+```
 
-1. **Verify paths first.** Before anything else, run:
-   ```python
-   from data.dataset_loader import verify_paths
-   verify_paths()
-   ```
-   Fix any `[MISSING]` paths in `config.py` before proceeding — folder
-   names in PlantVillage mirrors are inconsistent, don't assume the
-   defaults in `config.py` are correct for your specific dataset add.
+- **Model**: EfficientNetB3 (ImageNet pretrained), two-phase transfer
+  learning -- Phase 1 trains a dense classifier head on a frozen backbone,
+  Phase 2 fine-tunes the top 40 backbone layers (with BatchNorm layers
+  kept frozen -- see `DEFENSE_ANSWERS.md` for why) at a low learning rate
+  with cosine decay.
+- **Data**: 21 classes across 4 crops -- cassava (Kaggle competition
+  dataset, real field photos), maize/tomato/pepper
+  (`vipoooool/new-plant-diseases-dataset`, a PlantVillage derivative).
+  Yam was scoped out -- no usable public labeled dataset exists for it.
+- **Explainability**: Grad-CAM heatmaps generated per-prediction, shown
+  alongside the diagnosis in the app.
+- **Deployment**: Flask + Gunicorn on Render.
 
-2. **Build the manifest:**
-   ```python
-   from data.dataset_loader import build_manifest, split_manifest
-   df, class_to_idx = build_manifest()
-   train_df, val_df, test_df = split_manifest(df)
-   ```
-   Expect ~20 unified classes across cassava, maize, tomato, and pepper.
-   Check the printed `value_counts()` — if any class has under ~100
-   images, note it, this affects how much you should trust that class's
-   individual precision/recall later.
+## Results
 
-3. **Train:**
-   ```
-   python models/train.py
-   ```
-   or import and call `main()` directly in a notebook cell (recommended
-   on Kaggle so you can watch progress and restart from Phase 2 if the
-   session times out after Phase 1).
+- Phase 1 (frozen backbone): 52.9% val accuracy, val_loss 1.552.
+- Phase 2 (fine-tuned): 59.5% val accuracy, val_loss 1.316 (best at
+  epoch 14 of 20; EarlyStopping restored these weights).
+- **Test set** (held out, 5,835 images, never touched until final
+  evaluation): 58% overall accuracy. Strong on maize/pepper (0.67-0.98
+  F1), mixed on tomato, weakest on cassava's 4-way disease
+  discrimination (0.26-0.58 F1) -- full breakdown and root-cause analysis
+  in `DEFENSE_ANSWERS.md`.
 
-   **What to expect:**
-   - Phase 1 (frozen backbone): fast per epoch, accuracy should climb
-     steadily. If val_accuracy plateaus far below train_accuracy, that's
-     overfitting even in Phase 1 — check class imbalance handling.
-   - Phase 2 (fine-tuning): much slower per epoch. Watch `phase2_history.csv`
-     — the epoch where `val_loss` stops decreasing and starts rising is
-     your literal answer to Defense Question 2. Don't just eyeball the
-     printed plot — open the CSV and find the exact epoch number.
-   - Total training time: budget 2-4 hours depending on dataset size and
-     GPU (T4 vs P100). Don't start this with only 1 hour of session time left.
+See `DEFENSE_ANSWERS.md` for the full empirical evidence behind these
+numbers, including two real bugs found and fixed during development
+(a Grad-CAM preprocessing mismatch, and a BatchNorm-caused regression in
+Phase 2 fine-tuning) and an honest account of where the OOD rejection
+mechanism does and doesn't work.
 
-4. **Evaluate:**
-   ```
-   python models/evaluate.py
-   ```
-   This runs on the held-out test set only — never touched until now.
-   Also manually run:
-   - `test_gradcam_on_sample()` on a cassava image with a messy/soil
-     background (Defense Question 1 evidence).
-   - `test_ood_rejection()` on a photo of literally anything that isn't
-     a leaf — a shoe, a wall, your hand (Defense Question 3 evidence).
+## Repo structure
 
-5. **Download outputs** from Kaggle's Output tab before your session
-   ends: `agrivision_final.keras`, `class_index.json`, everything in
-   `models/plots/`, and `models/logs/*.csv`.
+```
+|-- config.py                 # paths, class mappings, hyperparameters
+|-- data/dataset_loader.py    # manifest building, splitting, augmentation
+|-- models/
+|   |-- train.py               # two-phase training
+|   |-- evaluate.py            # confusion matrix, Grad-CAM, OOD test
+|   `-- saved_models/          # trained model + class_index.json
+|-- app/
+|   |-- app.py                 # Flask app (upload/predict/Grad-CAM/PDF)
+|   |-- treatment_data.py      # disease -> treatment lookup table
+|   |-- templates/, static/
+|   `-- requirements.txt
+|-- DEFENSE_ANSWERS.md
+|-- BUSINESS_PLAN.md
+|-- feature_log.md
+`-- RENDER_DEPLOY.md
+```
 
-## Deployment (Render — Docker)
+## Running it
 
-The app deploys on Render as a **Docker** service. Docker pins Python 3.12
-inside the image, which guarantees `tensorflow==2.21.0` (cp312 Linux wheel)
-installs — this avoids Render's native `runtime.txt` fallback issue where
-an unsupported version silently falls back to Python 3.14 (no TF wheel).
+**Training** (Kaggle notebook, GPU): see cell-by-cell sequence in
+`models/train.py` and `data/dataset_loader.py` -- datasets needed are
+`cassava-leaf-disease-classification` (competition) and
+`vipoooool/new-plant-diseases-dataset`.
 
-### Option A — Blueprint (recommended, one click)
+**App, locally**:
+```bash
+cd app
+pip install -r requirements.txt
+python app.py
+```
+Requires `agrivision_final.keras` and `class_index.json` in
+`models/saved_models/` (trained model, not included in this repo due to
+size -- see Kaggle notebook output).
 
-1. Push this repo to GitHub (model weights live in `models/saved_models/`).
-2. Render dashboard → **New + → Blueprint** → connect `MadukaJP/agrivision-deep-learning-project`.
-3. Render reads `render.yaml` and creates the `agrivision` web service
-   (`runtime: docker`, `dockerfilePath: ./Dockerfile`). Deploy starts automatically.
-
-### Option B — Manual web service
-
-1. Render dashboard → **New + → Web Service** → connect the GitHub repo.
-2. Render detects the `Dockerfile` — **Runtime = Docker**.
-3. Service will build the image and run the `CMD`:
-   `gunicorn --chdir /app/app --bind 0.0.0.0:$PORT --workers 1 --threads 4 app:app`
-
-### Notes
-
-- **RAM:** Free tier is 512 MB. TensorFlow uses ~500 MB just loading the
-  model, so expect slow starts / possible OOM on free. If the container is
-  killed on startup, upgrade to **Starter** (Settings → Instance Type).
-- **Storage:** `app/static/uploads/` is ephemeral — wiped on every restart.
-  Uploaded images/PDFs are demo-only.
-- **Local test:**
-  ```
-  docker build -t agrivision .
-  docker run -p 8000:8000 agrivision
-  ```
-  Then open http://localhost:8000.
-
-## What NOT to skip
-
-The three defense questions are graded on whether you can produce real
-evidence, not a plausible-sounding answer. Specifically save:
-- `phase1_curves.png` and `phase2_curves.png` (loss/accuracy plots)
-- `phase2_history.csv` (to cite the exact overfitting epoch)
-- `gradcam_noisy_bg.png` (or similar name) showing the messy-background test
-- The printed OOD test output (confidence score on a non-plant image)
-
-These four artifacts are what turn "I built a CNN" into "I can defend
-what happened when I trained it" — which is the actual point of the
-rubric's defense section.
+**Deployment**: see `RENDER_DEPLOY.md`. Live app: _[add your Render URL
+here once deployed]_.
