@@ -12,7 +12,7 @@ Deep Learning & Applied AI Engineering capstone.
 manifest, stratified split, augmentation] -> [EfficientNetB3 transfer
 learning: Phase 1 frozen backbone -> Phase 2 fine-tuned top layers] ->
 [evaluate.py: confusion matrix, Grad-CAM, OOD test] -> [Flask app:
-upload -> predict -> Grad-CAM overlay -> PDF report] -> [Render deployment]
+upload -> predict -> Grad-CAM overlay -> PDF report] -> [Hugging Face deployment]
 ```
 
 - **Model**: EfficientNetB3 (ImageNet pretrained), two-phase transfer
@@ -26,7 +26,7 @@ upload -> predict -> Grad-CAM overlay -> PDF report] -> [Render deployment]
   Yam was scoped out -- no usable public labeled dataset exists for it.
 - **Explainability**: Grad-CAM heatmaps generated per-prediction, shown
   alongside the diagnosis in the app.
-- **Deployment**: Flask + Gunicorn on Render.
+- **Deployment**: Flask + Gunicorn on Hugging Face Spaces.
 
 ## Results
 
@@ -61,8 +61,7 @@ mechanism does and doesn't work.
 |   `-- requirements.txt
 |-- DEFENSE_ANSWERS.md
 |-- BUSINESS_PLAN.md
-|-- feature_log.md
-`-- RENDER_DEPLOY.md
+`-- feature_log.md
 ```
 
 ## Running it
@@ -82,5 +81,5 @@ Requires `agrivision_final.keras` and `class_index.json` in
 `models/saved_models/` (trained model, not included in this repo due to
 size -- see Kaggle notebook output).
 
-**Deployment**: see `RENDER_DEPLOY.md`. Live app: _[add your Render URL
-here once deployed]_.
+**Deployment**: Live app:
+**[https://jpmaduka-agrivision.hf.space/](https://jpmaduka-agrivision.hf.space/)**.
