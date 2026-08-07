@@ -67,13 +67,40 @@
    ends: `agrivision_final.keras`, `class_index.json`, everything in
    `models/plots/`, and `models/logs/*.csv`.
 
-## Deployment (Hugging Face Spaces)
+## Deployment (Render — Docker)
 
-1. Create a new Space at huggingface.co/new-space, SDK = Streamlit.
-2. Push: `app.py`, `treatment_data.py`, `requirements.txt`,
-   `agrivision_final.keras`, `class_index.json` — all in the Space's root.
-3. Space builds automatically. First load will be slow (model download +
-   TF import); subsequent loads are cached via `@st.cache_resource`.
+The app deploys on Render as a **Docker** service. Docker pins Python 3.12
+inside the image, which guarantees `tensorflow==2.21.0` (cp312 Linux wheel)
+installs — this avoids Render's native `runtime.txt` fallback issue where
+an unsupported version silently falls back to Python 3.14 (no TF wheel).
+
+### Option A — Blueprint (recommended, one click)
+
+1. Push this repo to GitHub (model weights live in `models/saved_models/`).
+2. Render dashboard → **New + → Blueprint** → connect `MadukaJP/agrivision-deep-learning-project`.
+3. Render reads `render.yaml` and creates the `agrivision` web service
+   (`runtime: docker`, `dockerfilePath: ./Dockerfile`). Deploy starts automatically.
+
+### Option B — Manual web service
+
+1. Render dashboard → **New + → Web Service** → connect the GitHub repo.
+2. Render detects the `Dockerfile` — **Runtime = Docker**.
+3. Service will build the image and run the `CMD`:
+   `gunicorn --chdir /app/app --bind 0.0.0.0:$PORT --workers 1 --threads 4 app:app`
+
+### Notes
+
+- **RAM:** Free tier is 512 MB. TensorFlow uses ~500 MB just loading the
+  model, so expect slow starts / possible OOM on free. If the container is
+  killed on startup, upgrade to **Starter** (Settings → Instance Type).
+- **Storage:** `app/static/uploads/` is ephemeral — wiped on every restart.
+  Uploaded images/PDFs are demo-only.
+- **Local test:**
+  ```
+  docker build -t agrivision .
+  docker run -p 8000:8000 agrivision
+  ```
+  Then open http://localhost:8000.
 
 ## What NOT to skip
 

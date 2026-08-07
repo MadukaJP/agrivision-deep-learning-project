@@ -1,0 +1,28 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[codz]
+*$py.class
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Local uploads generated at runtime (uploads are ephemeral in the container)
+app/static/uploads/*
+
+# Local caches / config
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.env
+.envrc
+
+# Keep models/saved_models/ (agrivision_final.keras + class_index.json) in the image
